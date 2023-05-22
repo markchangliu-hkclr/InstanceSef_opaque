@@ -6,7 +6,7 @@
 # Data, logs, images, .pth, tmp
 **/.pth
 **/data*
-**/log*
+**/logs
 **/tmp*
 **/exp*
 
