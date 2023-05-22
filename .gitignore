@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Data, logs, images, .pth, tmp
+**/.pth
+**/data*
+**/log*
+**/tmp*
+**/exp*
+
+# Vscode config
+**/.vscode
+
+# MMDet configs
+**/configs
+
+# Jupyter notebook checkpoints
+**/.ipynb_checkpoints
