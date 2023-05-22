@@ -3,12 +3,13 @@
 *.py[cod]
 *$py.class
 
-# Data, logs, images, .pth, tmp
+# Data, logs, images, .pth, tmp, bkp
 **/.pth
 **/data*
 **/logs
 **/tmp*
 **/exp*
+**/bkp*/**
 
 # Vscode config
 **/.vscode
