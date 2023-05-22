@@ -2,7 +2,7 @@
 # Project: AutoStore picking robots
 # Author: Chang Liu
 # Date last modified: May 19, 2023
-# Some codes are referenced from 
+# Some codes are referenced from https://github.com/facebookresearch/pycls
 
 
 """Preprocess operations that are usually implemented on 
@@ -14,10 +14,14 @@ import os
 import numpy as np
 import shutil
 import torchvision.transforms.functional as F
+from core.logging import get_logger
 from pathlib import Path
 from PIL import Image as pil_image
 from PIL.Image import Image
 from typing import Generator, Any, List, Union, Tuple, Dict
+
+
+_logger = get_logger(__name__)
 
 
 ############### File I/O Operations ###############
@@ -105,7 +109,7 @@ def find_img_paths_for_commodity_types(
             yield img_path, new_img_path
 
 
-############### Image Transforms ###############
+############### Image Transformations ###############
 
 def load_img_paths(img_dir: str) -> Generator[str, None, None]:
     """Load the paths of all images under a directory and 
@@ -132,10 +136,24 @@ def load_img_paths(img_dir: str) -> Generator[str, None, None]:
             yield img_path, img_name, img_ext
 
 
-def resize_single_image(
+def resize_pad_single_image(
         img: Image,
         new_size: Tuple[int, int]
     ) -> Image:
+    """Resize (adn padded) an image to `new_size` with unchanged 
+    aspect ratio. The dimension, either the height or the width, 
+    that is smaller than `new_size` after resizing will be zero-paded.
+
+    Args:
+        img (pil_image.Image):
+            A PIL Image instance.
+        new_size (Tuple[int, int]):
+            The output (h, w) of the image.
+    
+    Returns:
+        new_img (pil_image.Image):
+            The resized (and padded) image.
+    """
     h, w = img.height, img.width
     new_h, new_w = new_size
     rsz_scale = min(new_h / h, new_w / w)
@@ -158,41 +176,63 @@ def resize_single_image(
 #     return 
 
 
-def resize_imgs(
+def resize_pad_imgs(
         img_paths: Generator[str, Any, Any],
-        rsz_ratio: Tuple[float, float],
-        rsz_size: Tuple[int, int],
-    ) -> Image:
-    assert rsz_ratio or rsz_size, \
+        new_ratio: Tuple[float, float],
+        new_size: Tuple[int, int],
+    ) -> Generator[Image, None, None]:
+    """Apply `resize_pad_single_img` on a list of images.
+    The new size of images can be specified by either `rsz_ratio`
+    or `rsz_size`. 
+
+    You are supposed to provide one of `rsz_ratio` and `rsz_size`,
+    otherwise an error will arise. If you provide both, the function 
+    will use `rsz_ratio`.
+    
+    Args:
+        img_paths (Generator[str, Any, Any]):
+            A generator that can output image paths.
+        new_ratio: Tuple[float, float]:
+            The ratio of (new_h, new_w) to (current_h, current_w).
+        new_size: Tuple[int, int]:
+            The pixel size of (new_h, new_w).
+    
+    Yield:
+        new_imgs (Generator[pil_image.Image, None, None]):
+            A generator producing resized images.
+    """
+    assert new_ratio or new_size, \
         "You must provide one of 'rsz_ratio' and 'rsz_size'."
     for img_path in img_paths:
         try:
             img = pil_image.open(img_path)
         except Exception as e:
-            print(e) 
-
-    
-
-def resize_single_img(
-        img: Image,
-        new_size: Tuple[int, int],
-        ratio: Tuple[float, float]
-    ) -> Image:
-    assert (new_size is not None) or (ratio is not None), \
-        "You must specify one of 'new_size' and 'ratio'."
-    h, w = img.height, img.width
-    if new_size is not None:
-        new_h, new_w = new_size
-    else:
-        new_h, new_w = int(ratio[0] * h), int(ratio[1] * w)
-    img = F.resize(img, (new_h, new_w))
-    return img
+            raise e
+        h, w = img.height, img.width
+        if new_ratio:
+            new_size_ = (int(new_ratio[0] * h), int(new_ratio[1] * w))
+        else:
+            new_size_ = new_size
+        img = resize_pad_single_image(img, new_size_)
+        yield img
 
 
 def pad_single_img(
         img: Image,
         new_size: Tuple[int, int]
     ) -> Image:
+    """Zero-pad an image to a new size.
+    
+    Args:
+        img (pil_image.Image):
+            An PIL Image.
+        new_size (Tuple[int, int]):
+            The pixel size of (new_h, new_w).
+    
+    Returns:
+        new_img:
+            The zero-paded image.
+    """
     h, w = img.height, img.width
     new_h, new_w = new_size
     pad_top = (new_h - h) // 2
@@ -201,21 +241,6 @@ def pad_single_img(
     pad_right = new_w - w - pad_left
     img = F.pad(img, (pad_left, pad_top, pad_right, pad_bottom))
     return img
-
-def resize_and_pad_imgs(
-        imgs: Generator[Tuple[str, str, str], Any, Any],
-        resize_size: Tuple[int, int],
-        ratio: Tuple[float, float],
-        new_size: Tuple[int, int]
-    ) -> np.ndarray:
-    for img_path, img_name, img_ext in imgs:
-        img = pil_image.open(img_path)
-        img = resize_single_img(img, resize_size, ratio)
-        img = pad_single_img(img, new_size)
-        save_folder = os.path.join(os.getcwd(), "tmp")
-        os.makedirs(save_folder, exist_ok=True)
-        new_img_path = os.path.join(save_folder, f"{img_name}_rsz_pad.{img_ext}")
-        img.save(new_img_path)
 
 
 if __name__ == "__main__":
