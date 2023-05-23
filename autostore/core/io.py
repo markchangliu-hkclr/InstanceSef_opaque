@@ -98,14 +98,13 @@ def org_paths_commodity_type_path_map(
     
     Examples:
         >>> _COMMODITY_IMG_INDEX = {
-        >>>     "toothpaste": (0, 6),
-        >>>     "tea_box": (7, 10),
-        >>>    "napkin_box": (11, 15),
-        >>>    "bestbuy_can": (16, 20),
-        >>>    "coke_can": (21, 25),
-        >>>    "drink_bottle": (26, 39),
-        >>>    "wafer_biscuit": (40, 44),
-        >>>    "drink_bottle": (45, 53)
+        >>>     "toothpaste": ((0, 6)),
+        >>>     "tea_box": ((7, 10)),
+        >>>    "napkin_box": ((11, 15)),
+        >>>    "bestbuy_can": ((16, 20)),
+        >>>    "coke_can": ((21, 25)),
+        >>>    "drink_bottle": ((26, 39), (45, 53)),
+        >>>    "wafer_biscuit": ((40, 44)),
         >>> }
         >>> 
         >>> img_dir = "/home/whoever/data"
@@ -120,23 +119,29 @@ def org_paths_commodity_type_path_map(
         CURRENT_WORK_DIR/commodity_group/toothpaste/color_00000.png)
     """
     curr_path = os.getcwd()
-    for commodity, (start_idx, end_idx) in commodity_img_index.items():
-        new_img_dir = os.path.join(curr_path, "commodity_group", commodity)
-        img_indice = (str(i).rjust(5, "0") for i in range(start_idx, end_idx + 1))
-        img_names = (f"color_{img_idx}.png" for img_idx in img_indice)
-        for img_name in img_names:
-            img_path = os.path.join(img_dir, img_name)
-            new_img_path = os.path.join(new_img_dir, img_name)
-            yield img_path, new_img_path
+    for commodity, indice in commodity_img_index.items():
+        for start_idx, end_idx in indice:
+            new_img_dir = os.path.join(curr_path, "commodity_group", commodity)
+            img_indice = (str(i).rjust(5, "0") for i in range(start_idx, end_idx + 1))
+            img_names = (f"color_{img_idx}.png" for img_idx in img_indice)
+            for img_name in img_names:
+                img_path = os.path.join(img_dir, img_name)
+                new_img_path = os.path.join(new_img_dir, img_name)
+                yield img_path, new_img_path
 
 
-def org_path_new_path_constant_rel_map(
+def org_path_new_path_unchanged_rel_map(
         root_dir: str,
         folder_dir: str,
         new_root_dir: str,
     ) -> Generator[Tuple[str, str], None, None]:
     """
-    
+    Generate a list of (org_path, new_path) mappings, where oth_path
+    and new_path have the same relative path relative to root_dir and 
+    new_root_dir.
+
+    Args:
+        
     """
     new_root_dir = Path(new_root_dir)
     for root, subdirs, files in os.walk(folder_dir):
