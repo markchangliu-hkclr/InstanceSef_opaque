@@ -80,7 +80,7 @@ def mmdet_model_train(mmdet_cfg: str, weight_path: str, output_dir: str) -> None
     torch.save(state_dict, new_checkpoint_path)
 
 
-def model_inference(
+def mmdet_model_inference(
         img_dir: str,
         mmdet_cfg: str,
         weight_path: str,
