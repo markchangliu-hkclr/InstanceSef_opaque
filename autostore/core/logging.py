@@ -1,8 +1,7 @@
 # Corporation: HKCLR 
 # Project: AutoStore picking robots
 # Author: Chang Liu
-# Date last modified: May 22, 2023
-# Some codes are referenced from https://github.com/facebookresearch/pycls
+# Some codes are refered from https://github.com/facebookresearch/pycls
 
 
 """Setup loggers for other modules."""

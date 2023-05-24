@@ -1,8 +1,7 @@
 # Corporation: HKCLR 
 # Project: AutoStore picking robots
 # Author: Chang Liu
-# Date last modified: May 22, 2023
-# Some codes are referenced from https://github.com/facebookresearch/pycls
+# Some codes are refered from https://github.com/facebookresearch/pycls
 
 
 """Some I/O operations that could be helpful 
@@ -69,7 +68,7 @@ def cp_files(
         shutil.copyfile(src_path, dst_path)
 
 
-def org_paths_commodity_type_path_map(
+def org_path_commodity_type_path_map(
         commodity_img_index: Dict[str, Tuple[int, int]],
         img_dir: str
     ) -> Generator[Tuple[str, str], None, None]:
@@ -138,10 +137,17 @@ def org_path_new_path_unchanged_rel_map(
     """
     Generate a list of (org_path, new_path) mappings, where oth_path
     and new_path have the same relative path relative to root_dir and 
-    new_root_dir.
+    new_root_dir. In other words, `new_path.relative_to(new_root_dir)
+    == org_path.relative_to(root_dir)`.
 
     Args:
-        
+        root_dir (str): 
+            The root path adopted to compute the relative path of org_path.
+        folder_dir (str):
+            The folder path that files are stored at. `rel_path = file_path.
+            relative_to(root_dir)`
+        new_root_dir (str):
+            the new_path of files equals `new_root_dir / rel_path`.
     """
     new_root_dir = Path(new_root_dir)
     for root, subdirs, files in os.walk(folder_dir):
