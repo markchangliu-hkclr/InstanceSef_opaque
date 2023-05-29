@@ -127,3 +127,4 @@ def mmdet_model_inference(
     time_deltas = np.array(time_deltas)
     _logger.info(f"avg time consumed for inferencing \
                 {len(time_deltas)} images is {time_deltas.mean()}")
+    return model, result

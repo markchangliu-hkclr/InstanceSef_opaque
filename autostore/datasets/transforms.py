@@ -53,15 +53,6 @@ def resize_pad_single_image(
     return img
 
 
-# def resize_single_img_by_ratio(
-#         img: Image,
-#         new_ratio: Tuple[int, int]
-#     ) -> Image:
-#     h, w = img.height, img.width
-#     new_h, new_w = int(h * new_ratio[0]), int(w * new_ratio[1])
-#     return 
-
-
 def resize_pad_imgs(
         img_paths: Generator[str, Any, Any],
         new_ratio: Tuple[float, float],
