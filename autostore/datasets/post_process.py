@@ -95,6 +95,10 @@ def restore_seg_mask(
     org_seg_masks = []
     for seg_mask in seg_masks:
         seg_mask_img = pil_image.fromarray(seg_mask)
+        seg_mask_img = crop_single_img(
+            seg_mask_img,
+            rsz_size
+        )
         org_seg_mask = F.resize(seg_mask_img, img_size)
         org_seg_mask = np.asarray(org_seg_mask)
         org_seg_masks.append(org_seg_mask)
