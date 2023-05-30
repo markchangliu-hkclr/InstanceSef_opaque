@@ -162,39 +162,46 @@ def rsz_and_inference_imgs(
             rsz_size,
             input_size
         )
-        # valid_bbox_idx = remove_irregular_bboxes(
-        #     org_bboxes,
-        #     input_size,
-        #     0.9
-        # )
+        valid_bbox_idx = remove_irregular_bboxes(
+            org_bboxes,
+            input_size,
+            0.7
+        )
         org_seg_masks = restore_seg_mask(
             seg_masks,
             rsz_size,
             input_size
         )
-        # valid_seg_mask_idx = remove_irregular_seg_masks(
-        #     org_seg_masks,
-        #     input_size,
-        #     0.9
-        # )
-        # valid_org_bboxes = [org_bboxes[i] for i in valid_bbox_idx]
-        # valid_org_bboxes = np.concatenate(valid_org_bboxes, axis=0)
-        # valid_org_seg_masks = [org_seg_masks[i] for i in valid_seg_mask_idx]
-        valid_org_bboxes = np.concatenate(org_bboxes, axis=0)
-        valid_org_seg_masks = org_seg_masks
+        valid_seg_mask_idx = remove_irregular_seg_masks(
+            org_seg_masks,
+            input_size,
+            0.7
+        )
+        valid_idx = set(valid_bbox_idx).intersection(set(valid_seg_mask_idx))
+        valid_org_bboxes = [org_bboxes[i] for i in valid_idx]
+        valid_org_bboxes = np.concatenate(valid_org_bboxes, axis=0)
+        valid_org_seg_masks = [org_seg_masks[i] for i in valid_idx]
+        # valid_org_bboxes = np.concatenate(org_bboxes, axis=0)
+        # valid_org_seg_masks = org_seg_masks
         result[0][0] = valid_org_bboxes
         result[1][0] = valid_org_seg_masks
         if report_dir:
-            os.makedirs(Path(report_dir), exist_ok=True)
-            img_name, img_ext = Path(img_path).name.split(".")
-            visual_save_path = os.path.join(report_dir, f"{img_name}_pred.{img_ext}")
-            model.show_result(
-                img_path, 
-                result, 
-                score_thr=show_score_thr, 
-                out_file=visual_save_path, 
-                font_size=9
-            )
+            try: 
+                os.makedirs(Path(report_dir), exist_ok=True)
+                img_name, img_ext = Path(img_path).name.split(".")
+                visual_save_path = os.path.join(report_dir, f"{img_name}_pred.{img_ext}")
+                model.show_result(
+                    img_path, 
+                    result, 
+                    score_thr=show_score_thr, 
+                    out_file=visual_save_path, 
+                    font_size=9
+                )
+            except Exception as e:
+                print(e)
+                print(img_path)
+                print(valid_bbox_idx)
+                print(valid_seg_mask_idx)
     time_deltas = np.array(time_deltas)
     _logger.info(f"avg time consumed for inferencing \
                 {len(time_deltas)} images is {time_deltas.mean()}")

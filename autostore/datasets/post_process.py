@@ -27,7 +27,7 @@ def compute_iou(
     y2_int = min(y2_a, y2_b)
     int_area = (x2_int - x1_int) * (y2_int - y1_int)
     bbox_a_area = (x2_a - x1_a) * (y2_a - y1_a)
-    bbox_b_area = (x2_b - x1_b) * (y2_b - y2_a)
+    bbox_b_area = (x2_b - x1_b) * (y2_b - y1_b)
     return int_area / (bbox_a_area + bbox_b_area - int_area)
 
 
