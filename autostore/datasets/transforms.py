@@ -39,7 +39,9 @@ def resize_pad_single_image(
     
     Returns:
         new_img (pil_image.Image):
-            The resized (and padded) image.
+            The resized and padded image.
+        rsz_size (Tuple[int, int]):
+            The (h, w) of image after resizing before padding.
     """
     h, w = img.height, img.width
     if new_size:
@@ -135,7 +137,13 @@ def crop_single_img(
     ) -> pil_image.Image:
     h, w = img.height, img.width
     remain_h, remain_w = remain_size
-    
+    pad_top = (h - remain_h) // 2
+    pad_bottom = h - remain_h - pad_top
+    pad_left = (w - remain_w) // 2
+    pad_right = w - remain_w - pad_left
+    x1, y1 = pad_left, pad_top
+    x2, y2 = w - pad_right, h - pad_bottom
+    return img.crop((x1, y1, x2, y2))
 
 
 if __name__ == "__main__":
