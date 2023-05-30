@@ -11,6 +11,22 @@ import numpy as np
 from typing import Tuple, List, Any
 
 
+def compute_iou(
+        bbox_a: np.ndarray,
+        bbox_b: np.ndarray
+    ) -> float:
+    x1_a, y1_a, x2_a, y2_a = bbox_a[:4]
+    x1_b, y1_b, x2_b, y2_b = bbox_b[:4]
+    x1_int = max(x1_a, x1_b)
+    y1_int = max(y1_a, y1_b)
+    x2_int = min(x2_a, x2_b)
+    y2_int = min(y2_a, y2_b)
+    int_area = (x2_int - x1_int) * (y2_int - y1_int)
+    bbox_a_area = (x2_a - x1_a) * (y2_a - y1_a)
+    bbox_b_area = (x2_b - x1_b) * (y2_b - y2_a)
+    return int_area / (bbox_a_area + bbox_b_area - int_area)
+
+
 def restore_single_bbox(
         new_bbox_: np.ndarray,
         rsz_size: Tuple[int, int],
@@ -53,6 +69,15 @@ def restore_bboxes(
 
 
 def remove_irregular_bboxes(
-        
+        bboxes: List[np.ndarray],
+        img_size: Tuple[int, int],
+        iou_thr: float
     ):
-    pass
+    img_h, img_w = img_size
+    bbox_img = np.array([0, 0, img_w, img_h, 1])
+    filtered_bboxes = []
+    for bbox in bboxes:
+        iou = compute_iou(bbox, bbox_img)
+        if iou < iou_thr:
+            filtered_bboxes.append(bbox)
+    return filtered_bboxes

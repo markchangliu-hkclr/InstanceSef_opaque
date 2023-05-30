@@ -129,5 +129,14 @@ def pad_single_img(
     return img
 
 
+def crop_single_img(
+        img: pil_image.Image,
+        remain_size: Tuple[int, int]
+    ) -> pil_image.Image:
+    h, w = img.height, img.width
+    remain_h, remain_w = remain_size
+    
+
+
 if __name__ == "__main__":
     pass
