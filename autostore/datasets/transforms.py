@@ -14,7 +14,7 @@ import torchvision.transforms.functional as F
 from autostore.core.logging import get_logger
 from PIL import Image as pil_image
 from PIL.Image import Image
-from typing import Generator, Any, Tuple
+from typing import Generator, Any, Tuple, Optional
 
 
 _logger = get_logger(__name__)
@@ -24,9 +24,10 @@ _logger = get_logger(__name__)
 
 def resize_pad_single_image(
         img: Image,
-        new_size: Tuple[int, int]
-    ) -> Image:
-    """Resize (adn padded) an image to `new_size` with unchanged 
+        new_size: Optional[Tuple[int, int]] = None,
+        new_ratio: Optional[Tuple[float, float]] = None
+    ) -> Tuple[Image, Tuple[int, int]]:
+    """Resize (and padded) an image to `new_size` with unchanged 
     aspect ratio. The dimension, either the height or the width, 
     that is smaller than `new_size` after resizing will be zero-paded.
 
@@ -41,7 +42,14 @@ def resize_pad_single_image(
             The resized (and padded) image.
     """
     h, w = img.height, img.width
-    new_h, new_w = new_size
+    if new_size:
+        new_h, new_w = new_size
+    elif new_ratio:
+        new_h_ratio, new_w_ratio = new_ratio
+        new_h = int(h * new_h_ratio)
+        new_w = int(w * new_w_ratio)
+    else:
+        pass
     rsz_scale = min(new_h / h, new_w / w)
     rsz_h, rsz_w = int(rsz_scale * h), int(rsz_scale * w)
     img = F.resize(img, (rsz_h, rsz_w))
@@ -50,7 +58,8 @@ def resize_pad_single_image(
     pad_top = (new_h - rsz_h) // 2
     pad_bottom = new_h - pad_top - rsz_h
     img = F.pad(img, (pad_left, pad_top, pad_right, pad_bottom))
-    return img
+    rsz_size = (rsz_h, rsz_w)
+    return img, rsz_size
 
 
 def resize_pad_imgs(
