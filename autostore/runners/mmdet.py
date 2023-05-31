@@ -15,11 +15,19 @@ import os
 import torch
 import time
 from mmcv import Config
+from mmcv.image import tensor2imgs
+from mmcv.runner import load_checkpoint
+from mmcv.parallel import MMDataParallel
 from mmdet.apis import set_random_seed, init_detector, inference_detector
-from mmdet.datasets import build_dataset
+from mmdet.core import encode_mask_results
+from mmdet.datasets import (
+    build_dataset,
+    build_dataloader,
+    replace_ImageToTensor
+)
 from mmdet.models import build_detector
-from mmdet.apis import train_detector
-from typing import Optional, Tuple
+from mmdet.apis import train_detector, single_gpu_test
+from typing import Optional, Tuple, List, NewType, Dict, Any
 from pathlib import Path
 from autostore.core.logging import get_logger
 from autostore.core.io import load_img_paths
@@ -33,6 +41,12 @@ from autostore.datasets.post_process import (
 
 
 _logger = get_logger(__name__)
+
+
+EvaluateResultType = NewType(
+    "EvaluateResultType",
+    List[Tuple[List[np.ndarray], List[List[Dict[str, Any]]]]]
+)
 
 
 def train_model(
@@ -89,6 +103,129 @@ def train_model(
     state_dict = {"state_dict": weights, "meta": meta}
     new_checkpoint_path = os.path.join(cfg.work_dir, f"{checkpoint_name}_small.pth")
     torch.save(state_dict, new_checkpoint_path)
+
+
+def test_imgs(
+        mmdet_cfg: str,
+        weight_path: str, 
+        report_dir: str,
+        show_score_thr: float
+    ) -> None:
+    cfg = Config.fromfile(mmdet_cfg)
+    try:
+        # This del operation is to avoid exception that exclusively happened 
+        # on loading mask2former_r50 models
+        del cfg.data.val.ins_ann_file
+        del cfg.data.test.ins_ann_file
+    except:
+        pass
+    
+    if 'pretrained' in cfg.model:
+        cfg.model.pretrained = None
+    elif 'init_cfg' in cfg.model.backbone:
+        cfg.model.backbone.init_cfg = None
+    
+    if cfg.model.get('neck'):
+        if isinstance(cfg.model.neck, list):
+            for neck_cfg in cfg.model.neck:
+                if neck_cfg.get('rfp_backbone'):
+                    if neck_cfg.rfp_backbone.get('pretrained'):
+                        neck_cfg.rfp_backbone.pretrained = None
+        elif cfg.model.neck.get('rfp_backbone'):
+            if cfg.model.neck.rfp_backbone.get('pretrained'):
+                cfg.model.neck.rfp_backbone.pretrained = None
+    
+    # Set seed thus the results are more reproducible
+    cfg.seed = 0
+    set_random_seed(0, deterministic=False)
+    cfg.gpu_ids = [1]
+
+    # in case the test dataset is concatenated
+    if isinstance(cfg.data.test, dict):
+        cfg.data.test.test_mode = True
+        samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
+        if samples_per_gpu > 1:
+            # Replace 'ImageToTensor' to 'DefaultFormatBundle'
+            cfg.data.test.pipeline = replace_ImageToTensor(
+                cfg.data.test.pipeline)
+    elif isinstance(cfg.data.test, list):
+        for ds_cfg in cfg.data.test:
+            ds_cfg.test_mode = True
+        samples_per_gpu = max(
+            [ds_cfg.pop('samples_per_gpu', 1) for ds_cfg in cfg.data.test])
+        if samples_per_gpu > 1:
+            for ds_cfg in cfg.data.test:
+                ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
+
+    # Build dataset
+    dataset = build_dataset(cfg.data.test)
+    data_loader = build_dataloader(
+            dataset,
+            samples_per_gpu=samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=False, #distributed
+            shuffle=False)
+    
+    # Build the detector
+    cfg.model.train_cfg = None
+    model = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
+    checkpoint = load_checkpoint(model, weight_path, map_location='cpu')
+
+    if 'CLASSES' in checkpoint.get('meta', {}):
+        model.CLASSES = checkpoint['meta']['CLASSES']
+    else:
+        model.CLASSES = dataset.CLASSES
+
+    model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+    outputs = single_gpu_test(
+        model, 
+        data_loader, 
+        False, 
+        report_dir,
+        show_score_thr
+    )
+    kwargs = {}
+    eval_kwargs = cfg.get('evaluation', {}).copy()
+    # hard-code way to remove EvalHook args
+    for key in ['interval', 'tmpdir', 'start', 
+        'gpu_collect', 'save_best', 'rule', 'dynamic_intervals']:
+        eval_kwargs.pop(key, None)
+    eval_kwargs.update(dict(metric = ["bbox", "segm"], **kwargs))
+    metric = dataset.evaluate(outputs, **eval_kwargs)
+    _logger.info(metric)
+    return model, outputs
+
+
+def rsz_and_test_imgs(
+        mmdet_cfg: str,
+        weight_path: str,
+        input_size: Tuple[int, int],
+        show_score_thr: float,
+        report_dir: Optional[str] = None,
+    ) -> None:
+    cfg = Config.fromfile(mmdet_cfg)
+    test_img_dir = cfg.data.test.img_prefix
+    test_ann_file = cfg.data.test.ann_file
+    model, results = rsz_and_inference_imgs(
+        test_img_dir,
+        mmdet_cfg,
+        weight_path,
+        input_size,
+        show_score_thr,
+        report_dir
+    )
+    test_dataset = build_dataset(cfg.data.test)
+    kwargs = {}
+    eval_kwargs = cfg.get('evaluation', {}).copy()
+    # hard-code way to remove EvalHook args
+    for key in ['interval', 'tmpdir', 'start', 
+        'gpu_collect', 'save_best', 'rule', 
+        'dynamic_intervals']:
+        eval_kwargs.pop(key, None)
+    eval_kwargs.update(dict(metric = ["bbox", "segm"], **kwargs))
+    metric = test_dataset.evaluate(results, **eval_kwargs)
+    print(metric)
+    return model, results
 
 
 def inference_imgs(
@@ -148,9 +285,11 @@ def rsz_and_inference_imgs(
         input_size: Tuple[int, int],
         show_score_thr: float,
         report_dir: Optional[str] = None,
-    ):
+    ) -> EvaluateResultType:
     model = init_detector(mmdet_cfg, weight_path, device='cuda:0')
     time_deltas = []
+    results = []
+    i = 0
     for img_path, img, rsz_size in rsz_imgs(img_dir, input_size):
         t1 = time.time()
         result = inference_detector(model, img)
@@ -165,7 +304,7 @@ def rsz_and_inference_imgs(
         valid_bbox_idx = remove_irregular_bboxes(
             org_bboxes,
             input_size,
-            0.7
+            0.8
         )
         org_seg_masks = restore_seg_mask(
             seg_masks,
@@ -175,14 +314,12 @@ def rsz_and_inference_imgs(
         valid_seg_mask_idx = remove_irregular_seg_masks(
             org_seg_masks,
             input_size,
-            0.7
+            0.8
         )
         valid_idx = set(valid_bbox_idx).intersection(set(valid_seg_mask_idx))
         valid_org_bboxes = [org_bboxes[i] for i in valid_idx]
         valid_org_bboxes = np.concatenate(valid_org_bboxes, axis=0)
         valid_org_seg_masks = [org_seg_masks[i] for i in valid_idx]
-        # valid_org_bboxes = np.concatenate(org_bboxes, axis=0)
-        # valid_org_seg_masks = org_seg_masks
         result[0][0] = valid_org_bboxes
         result[1][0] = valid_org_seg_masks
         if report_dir:
@@ -202,7 +339,14 @@ def rsz_and_inference_imgs(
                 print(img_path)
                 print(valid_bbox_idx)
                 print(valid_seg_mask_idx)
+        
+        result_ = [([valid_org_bboxes], [valid_org_seg_masks])]
+        encoded_result = [(bbox_result, encode_mask_results(mask_result))
+            for bbox_result, mask_result in result_]
+        results.extend(encoded_result)
+        i += 1
+
     time_deltas = np.array(time_deltas)
     _logger.info(f"avg time consumed for inferencing \
                 {len(time_deltas)} images is {time_deltas.mean()}")
-    return model, result
+    return model, results
