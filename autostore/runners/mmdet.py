@@ -108,8 +108,8 @@ def train_model(
 def test_imgs(
         mmdet_cfg: str,
         weight_path: str, 
+        show_score_thr: float,
         report_dir: str,
-        show_score_thr: float
     ) -> None:
     cfg = Config.fromfile(mmdet_cfg)
     try:
