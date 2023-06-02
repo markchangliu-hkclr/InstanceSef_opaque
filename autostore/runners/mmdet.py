@@ -15,7 +15,6 @@ import os
 import torch
 import time
 from mmcv import Config
-from mmcv.image import tensor2imgs
 from mmcv.runner import load_checkpoint
 from mmcv.parallel import MMDataParallel
 from mmdet.apis import set_random_seed, init_detector, inference_detector
@@ -31,7 +30,7 @@ from typing import Optional, Tuple, List, NewType, Dict, Any
 from pathlib import Path
 from autostore.core.logging import get_logger
 from autostore.core.io import load_img_paths
-from autostore.datasets.pre_process import rsz_imgs
+from autostore.datasets.pre_process import rsz_imgs_from_csv_info
 from autostore.datasets.post_process import (
     restore_bboxes,
     restore_seg_mask,
@@ -290,7 +289,8 @@ def rsz_and_inference_imgs(
     time_deltas = []
     results = []
     i = 0
-    for img_path, img, rsz_size in rsz_imgs(img_dir, input_size):
+    for img_path, img, rsz_size in rsz_imgs_from_csv_info(img_dir, input_size):
+        img = np.asarray(img).astype(np.int8)
         t1 = time.time()
         result = inference_detector(model, img)
         t2 = time.time()

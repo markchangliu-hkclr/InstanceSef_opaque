@@ -9,6 +9,7 @@ data before feeding them into models.
 """
 
 
+import numpy as np
 import os
 import torchvision.transforms.functional as F
 from autostore.core.logging import get_logger
@@ -132,9 +133,9 @@ def pad_single_img(
 
 
 def crop_single_img(
-        img: pil_image.Image,
+        img: Image,
         remain_size: Tuple[int, int]
-    ) -> pil_image.Image:
+    ) -> Image:
     h, w = img.height, img.width
     remain_h, remain_w = remain_size
     pad_top = (h - remain_h) // 2
@@ -144,6 +145,28 @@ def crop_single_img(
     x1, y1 = pad_left, pad_top
     x2, y2 = w - pad_right, h - pad_bottom
     return img.crop((x1, y1, x2, y2))
+
+
+def paste_single_img(
+        foreground_img: Image,
+        background_img: Image,
+    ) -> Image:
+    w_margin = 8
+    h_margin = 8
+    fore_w, fore_h = foreground_img.size
+    back_w, back_h = background_img.size
+    foreground_img = np.asarray(foreground_img).astype(np.int8)
+    background_img = np.asarray(background_img).astype(np.int8)
+    x1 = (back_w - fore_w) // 2 + w_margin
+    x2 = (back_w - fore_w) // 2 + fore_w - w_margin
+    y1 = (back_h - fore_h) // 2 + h_margin
+    y2 = (back_h - fore_h) // 2 + fore_h - h_margin
+    paste_img = background_img.copy()
+    paste_img[y1:y2, x1:x2, :] = foreground_img[
+        h_margin:fore_h - h_margin, w_margin: fore_w - w_margin, :
+    ]
+    paste_img = pil_image.fromarray(paste_img, mode="RGB")
+    return paste_img
 
 
 if __name__ == "__main__":

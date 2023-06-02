@@ -41,9 +41,10 @@ def load_img_paths(img_dir: str) -> Generator[str, None, None]:
     for root, subdirs, files in os.walk(img_dir):
         for file in files:
             if file.endswith((".jpg", ".jpeg", ".png")):
-                img_path = os.path.join(root, file)
-                img_name, img_ext = file.split(".")
-                yield img_path, img_name, img_ext
+                img_path = Path(os.path.join(root, file))
+                img_name = img_path.stem
+                img_ext = img_path.suffix
+                yield str(img_path), img_name, img_ext
 
 
 def cp_files(
