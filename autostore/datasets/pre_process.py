@@ -54,7 +54,7 @@ def rsz_imgs_from_csv_info(
 def rsz_paste_imgs_from_csv_info(
         img_dir: str,
         background_img: pil_image.Image
-    ) -> Generator[Tuple[str, Image], None, None]:
+    ) -> Generator[Tuple[str, Image, Tuple[int, int]], None, None]:
     rsz_file_path = os.path.join(img_dir, "resize.csv")
     rsz_info = get_rsz_info(rsz_file_path)
     for img_path, rsz_ratio in rsz_info:
@@ -65,4 +65,4 @@ def rsz_paste_imgs_from_csv_info(
         )
         img = crop_single_img(img, rsz_size)
         img = paste_single_img(img, background_img)
-        yield img_path, img
+        yield img_path, img, rsz_size

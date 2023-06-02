@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import mmcv
 import os
+import PIL.Image as pil_image
 import torch
 import time
 from mmcv import Config
@@ -26,11 +27,15 @@ from mmdet.datasets import (
 )
 from mmdet.models import build_detector
 from mmdet.apis import train_detector, single_gpu_test
-from typing import Optional, Tuple, List, NewType, Dict, Any
+from typing import Optional, Tuple, List, NewType, Dict, Any, Callable
 from pathlib import Path
+from PIL.Image import Image
 from autostore.core.logging import get_logger
 from autostore.core.io import load_img_paths
-from autostore.datasets.pre_process import rsz_imgs_from_csv_info
+from autostore.datasets.pre_process import (
+    rsz_imgs_from_csv_info,
+    rsz_paste_imgs_from_csv_info
+)
 from autostore.datasets.post_process import (
     restore_bboxes,
     restore_seg_mask,
@@ -198,21 +203,33 @@ def test_imgs(
 def rsz_and_test_imgs(
         mmdet_cfg: str,
         weight_path: str,
-        input_size: Tuple[int, int],
         show_score_thr: float,
+        mode: str,
+        input_size: Optional[Tuple[int, int]] = None,
         report_dir: Optional[str] = None,
+        background_img_path: str = None,
     ) -> None:
     cfg = Config.fromfile(mmdet_cfg)
     test_img_dir = cfg.data.test.img_prefix
     test_ann_file = cfg.data.test.ann_file
-    model, results = rsz_and_inference_imgs(
-        test_img_dir,
-        mmdet_cfg,
-        weight_path,
-        input_size,
-        show_score_thr,
-        report_dir
-    )
+    if mode == "rsz_inference_imgs":
+        model, results = rsz_inference_imgs(
+            test_img_dir,
+            mmdet_cfg,
+            weight_path,
+            input_size,
+            show_score_thr,
+            report_dir
+        )
+    elif mode == "rsz_paste_inference_imgs":
+        model, results = rsz_paste_inference_imgs(
+            test_img_dir,
+            mmdet_cfg,
+            weight_path,
+            background_img_path,
+            show_score_thr,
+            report_dir
+        )
     test_dataset = build_dataset(cfg.data.test)
     kwargs = {}
     eval_kwargs = cfg.get('evaluation', {}).copy()
@@ -277,7 +294,7 @@ def inference_imgs(
     return model, result
 
 
-def rsz_and_inference_imgs(
+def rsz_inference_imgs(
         img_dir: str,
         mmdet_cfg: str,
         weight_path: str,
@@ -290,7 +307,84 @@ def rsz_and_inference_imgs(
     results = []
     i = 0
     for img_path, img, rsz_size in rsz_imgs_from_csv_info(img_dir, input_size):
-        img = np.asarray(img).astype(np.int8)
+        img = np.asarray(img).astype(np.uint8)
+        t1 = time.time()
+        result = inference_detector(model, img)
+        t2 = time.time()
+        time_deltas.append(t2 - t1)
+        bboxes, seg_masks = result[0][0], result[1][0]
+        org_bboxes = restore_bboxes(
+            bboxes,
+            rsz_size,
+            input_size
+        )
+        valid_bbox_idx = remove_irregular_bboxes(
+            org_bboxes,
+            input_size,
+            0.8
+        )
+        org_seg_masks = restore_seg_mask(
+            seg_masks,
+            rsz_size,
+            input_size
+        )
+        valid_seg_mask_idx = remove_irregular_seg_masks(
+            org_seg_masks,
+            input_size,
+            0.8
+        )
+        valid_idx = set(valid_bbox_idx).intersection(set(valid_seg_mask_idx))
+        valid_org_bboxes = [org_bboxes[i] for i in valid_idx]
+        valid_org_bboxes = np.concatenate(valid_org_bboxes, axis=0)
+        valid_org_seg_masks = [org_seg_masks[i] for i in valid_idx]
+        result[0][0] = valid_org_bboxes
+        result[1][0] = valid_org_seg_masks
+        if report_dir:
+            try: 
+                os.makedirs(Path(report_dir), exist_ok=True)
+                img_name, img_ext = Path(img_path).name.split(".")
+                visual_save_path = os.path.join(report_dir, f"{img_name}_pred.{img_ext}")
+                model.show_result(
+                    img_path, 
+                    result, 
+                    score_thr=show_score_thr, 
+                    out_file=visual_save_path, 
+                    font_size=9
+                )
+            except Exception as e:
+                print(e)
+                print(img_path)
+                print(valid_bbox_idx)
+                print(valid_seg_mask_idx)
+        
+        result_ = [([valid_org_bboxes], [valid_org_seg_masks])]
+        encoded_result = [(bbox_result, encode_mask_results(mask_result))
+            for bbox_result, mask_result in result_]
+        results.extend(encoded_result)
+        i += 1
+
+    time_deltas = np.array(time_deltas)
+    _logger.info(f"avg time consumed for inferencing \
+                {len(time_deltas)} images is {time_deltas.mean()}")
+    return model, results
+
+
+def rsz_paste_inference_imgs(
+        img_dir: str,
+        mmdet_cfg: str,
+        weight_path: str,
+        background_img_path: str,
+        show_score_thr: float,
+        report_dir: Optional[str] = None,
+    ) -> EvaluateResultType:
+    back_img = pil_image.open(background_img_path).convert("RGB")
+    input_size = (back_img.height, back_img.width)
+    model = init_detector(mmdet_cfg, weight_path, device='cuda:0')
+    time_deltas = []
+    results = []
+    i = 0
+    for img_path, img, rsz_size in rsz_paste_imgs_from_csv_info(img_dir, back_img):
+        img = np.asarray(img).astype(np.uint8)
         t1 = time.time()
         result = inference_detector(model, img)
         t2 = time.time()
