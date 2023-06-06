@@ -92,12 +92,12 @@ def train_model(
     model = build_detector(cfg.model)
     model.CLASSES = datasets[0].CLASSES
     mmcv.mkdir_or_exist(os.path.abspath(cfg.work_dir))
-    train_detector(model, datasets, cfg, distributed=True, validate=True)
+    train_detector(model, datasets, cfg, distributed=False, validate=True)
     
     try:
-        checkpoint_name = '/epoch_'+str(cfg.runner.max_epochs)
+        checkpoint_name = 'epoch_'+str(cfg.runner.max_epochs)
     except:
-        checkpoint_name = '/iter_'+str(cfg.runner.max_iters)
+        checkpoint_name = 'iter_'+str(cfg.runner.max_iters)
     checkpoint_path = os.path.join(cfg.work_dir, f"{checkpoint_name}.pth")
     checkpoint = torch.load(checkpoint_path)
     os.remove(checkpoint_path)
