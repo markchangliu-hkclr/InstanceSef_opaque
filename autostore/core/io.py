@@ -10,6 +10,7 @@ in other modules.
 
 import os
 import shutil
+import torch
 from pathlib import Path
 from autostore.core.logging import get_logger
 from typing import Generator, Tuple, Any, Dict
@@ -158,3 +159,19 @@ def org_path_new_path_unchanged_rel_map(
                 rel_path = old_path.relative_to(root_dir)
                 new_path = new_root_dir / rel_path
                 yield str(old_path), str(new_path)
+
+
+def lightweight_checkpoint(
+        checkpoint_path: str
+    ) -> None:
+    checkpoint_path = Path(checkpoint_path)
+    checkpoint_name = checkpoint_path.stem
+    checkpoint_ext = checkpoint_path.suffix
+    checkpoint = torch.load(checkpoint_path)
+    # os.remove(checkpoint_path)
+    meta = checkpoint['meta']
+    checkpoint['optimizer'] = None
+    weights = checkpoint['state_dict']
+    state_dict = {"state_dict": weights, "meta": meta}
+    new_checkpoint_path = checkpoint_path.parent / f"{checkpoint_name}_small{checkpoint_ext}"
+    torch.save(state_dict, str(new_checkpoint_path))

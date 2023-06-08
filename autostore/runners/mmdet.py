@@ -113,7 +113,7 @@ def test_imgs(
         mmdet_cfg: str,
         weight_path: str, 
         show_score_thr: float,
-        report_dir: str,
+        report_dir: Optional[str] = None,
     ) -> None:
     cfg = Config.fromfile(mmdet_cfg)
     try:
@@ -286,7 +286,7 @@ def inference_imgs(
                 result, 
                 score_thr=show_score_thr, 
                 out_file=visual_save_path, 
-                font_size=9
+                font_size=10
             )
     time_deltas = np.array(time_deltas)
     _logger.info(f"avg time consumed for inferencing \
