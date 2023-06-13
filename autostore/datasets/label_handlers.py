@@ -49,9 +49,6 @@ def visualize_coco(
     pass
 
 
-def 
-
-
 class CocoDatasetHandler:
     def __init__(self, jsonpath, imgpath):
         with open(jsonpath, 'r') as jsonfile:
