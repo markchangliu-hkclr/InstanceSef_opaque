@@ -142,7 +142,7 @@ def test_imgs(
     # Set seed thus the results are more reproducible
     cfg.seed = 0
     set_random_seed(0, deterministic=False)
-    cfg.gpu_ids = [1]
+    cfg.gpu_ids = [0]
 
     # in case the test dataset is concatenated
     if isinstance(cfg.data.test, dict):
