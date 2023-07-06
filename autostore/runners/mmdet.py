@@ -30,7 +30,7 @@ from mmdet.apis import train_detector, single_gpu_test
 from typing import Optional, Tuple, List, NewType, Dict, Any, Callable
 from pathlib import Path
 from PIL.Image import Image
-from autostore.core.logging import get_logger
+from autostore.core.logging import get_logger, setup_logging
 from autostore.core.io import load_img_paths
 from autostore.datasets.pre_process import (
     rsz_imgs_from_csv_info,
@@ -42,9 +42,6 @@ from autostore.datasets.post_process import (
     remove_irregular_bboxes,
     remove_irregular_seg_masks
 )
-
-
-_logger = get_logger(__name__)
 
 
 EvaluateResultType = NewType(
@@ -72,6 +69,9 @@ def train_model(
     Returns:
         None
     """
+    os.makedirs(output_dir, exist_ok=True)
+    setup_logging(os.path.join(output_dir, "train.log"))
+    _logger = get_logger(__name__)
     cfg = Config.fromfile(mmdet_cfg)
     cfg.load_from = weight_path
     _logger.info(f"Loaded config file from {mmdet_cfg}.")
@@ -113,8 +113,12 @@ def test_imgs(
         mmdet_cfg: str,
         weight_path: str, 
         show_score_thr: float,
-        report_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        font_size:int = 10,
     ) -> None:
+    os.makedirs(output_dir, exist_ok=True)
+    setup_logging(os.path.join(output_dir, "test.log"))
+    _logger = get_logger(__name__)
     cfg = Config.fromfile(mmdet_cfg)
     try:
         # This del operation is to avoid exception that exclusively happened 
@@ -185,8 +189,9 @@ def test_imgs(
         model, 
         data_loader, 
         False, 
-        report_dir,
-        show_score_thr
+        None,
+        show_score_thr,
+        font_size
     )
     kwargs = {}
     eval_kwargs = cfg.get('evaluation', {}).copy()
@@ -206,7 +211,7 @@ def rsz_and_test_imgs(
         show_score_thr: float,
         mode: str,
         input_size: Optional[Tuple[int, int]] = None,
-        report_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
         background_img_path: str = None,
     ) -> None:
     cfg = Config.fromfile(mmdet_cfg)
@@ -219,7 +224,7 @@ def rsz_and_test_imgs(
             weight_path,
             input_size,
             show_score_thr,
-            report_dir
+            output_dir
         )
     elif mode == "rsz_paste_inference_imgs":
         model, results = rsz_paste_inference_imgs(
@@ -228,7 +233,7 @@ def rsz_and_test_imgs(
             weight_path,
             background_img_path,
             show_score_thr,
-            report_dir
+            output_dir
         )
     test_dataset = build_dataset(cfg.data.test)
     kwargs = {}
@@ -249,7 +254,7 @@ def inference_imgs(
         mmdet_cfg: str,
         weight_path: str,
         show_score_thr: float,
-        report_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
     ) -> None:
     """Perform inference on images with a mmdet model.
     
@@ -263,7 +268,7 @@ def inference_imgs(
         show_score_thr (float):
             BBox with score lower than this value will not show
             on inference result visualization.
-        report_dir (Optional[str]):
+        output_dir (Optional[str]):
             The path to save visualization results. if None, visualization
             results will not be saved.
     
@@ -272,15 +277,17 @@ def inference_imgs(
     """
     model = init_detector(mmdet_cfg, weight_path, device='cuda:0')
     time_deltas = []
+    results = []
     for img_path, img_name, img_ext in load_img_paths(img_dir):
         img = cv2.imread(img_path)
         t1 = time.time()
         result = inference_detector(model, img)
         t2 = time.time()
         time_deltas.append(t2 - t1)
-        if report_dir:
-            os.makedirs(Path(report_dir), exist_ok=True)
-            visual_save_path = os.path.join(report_dir, f"{img_name}_inf.{img_ext}")
+        results.append(result)
+        if output_dir:
+            os.makedirs(Path(output_dir), exist_ok=True)
+            visual_save_path = os.path.join(output_dir, f"{img_name}_inf.{img_ext}")
             model.show_result(
                 img_path, 
                 result, 
@@ -289,9 +296,8 @@ def inference_imgs(
                 font_size=10
             )
     time_deltas = np.array(time_deltas)
-    _logger.info(f"avg time consumed for inferencing \
-                {len(time_deltas)} images is {time_deltas.mean()}")
-    return model, result
+    print(f"avg time consumed for inferencing {len(time_deltas)} images is {time_deltas.mean()}")
+    return model, results
 
 
 def rsz_inference_imgs(
@@ -300,7 +306,7 @@ def rsz_inference_imgs(
         weight_path: str,
         input_size: Tuple[int, int],
         show_score_thr: float,
-        report_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
     ) -> EvaluateResultType:
     model = init_detector(mmdet_cfg, weight_path, device='cuda:0')
     time_deltas = []
@@ -339,11 +345,11 @@ def rsz_inference_imgs(
         valid_org_seg_masks = [org_seg_masks[i] for i in valid_idx]
         result[0][0] = valid_org_bboxes
         result[1][0] = valid_org_seg_masks
-        if report_dir:
+        if output_dir:
             try: 
-                os.makedirs(Path(report_dir), exist_ok=True)
+                os.makedirs(Path(output_dir), exist_ok=True)
                 img_name, img_ext = Path(img_path).name.split(".")
-                visual_save_path = os.path.join(report_dir, f"{img_name}_pred.{img_ext}")
+                visual_save_path = os.path.join(output_dir, f"{img_name}_pred.{img_ext}")
                 model.show_result(
                     img_path, 
                     result, 
@@ -375,7 +381,7 @@ def rsz_paste_inference_imgs(
         weight_path: str,
         background_img_path: str,
         show_score_thr: float,
-        report_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
     ) -> EvaluateResultType:
     back_img = pil_image.open(background_img_path).convert("RGB")
     input_size = (back_img.height, back_img.width)
@@ -416,11 +422,11 @@ def rsz_paste_inference_imgs(
         valid_org_seg_masks = [org_seg_masks[i] for i in valid_idx]
         result[0][0] = valid_org_bboxes
         result[1][0] = valid_org_seg_masks
-        if report_dir:
+        if output_dir:
             try: 
-                os.makedirs(Path(report_dir), exist_ok=True)
+                os.makedirs(Path(output_dir), exist_ok=True)
                 img_name, img_ext = Path(img_path).name.split(".")
-                visual_save_path = os.path.join(report_dir, f"{img_name}_pred.{img_ext}")
+                visual_save_path = os.path.join(output_dir, f"{img_name}_pred.{img_ext}")
                 model.show_result(
                     img_path, 
                     result, 

@@ -9,12 +9,13 @@
 
 import logging
 import sys
+from typing import Optional
 
 
 _FORMAT = "[%(filename)s: %(lineno)3d]: %(message)s"
 
 
-def setup_logging() -> None:
+def setup_logging(log_path: Optional[str] = None) -> None:
     """Set up root logger by add a StreamHandler with a
     Formatter on it.
 
@@ -33,8 +34,13 @@ def setup_logging() -> None:
     logging_cfg = {
         "level": logging.INFO, 
         "format": _FORMAT,
-        "stream": sys.stdout
     }
+    if log_path:
+        log_handler = logging.FileHandler(log_path)
+        stream_handler = logging.StreamHandler(sys.stdout)
+        logging_cfg.update({"handlers": [log_handler, stream_handler]})
+    else:
+        logging_cfg.update({"stream": sys.stdout})
     logging.basicConfig(**logging_cfg)
 
 

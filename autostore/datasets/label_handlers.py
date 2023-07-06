@@ -34,10 +34,10 @@ def cvt_labelme2coco(
     with open(os.path.join(SRC, '{}.json'.format('dataset')), 'r') as f:
         ori_json = json.load(f)
 
-    for i in range(len(ori_json['annotations'])):
-        print(ori_json['annotations'][i]["id"])
-        ori_json['annotations'][i]['category_id'] = 0
-    ori_json['categories'] = [{'id':0, 'name': 'object'}]
+    # for i in range(len(ori_json['annotations'])):
+    #     print(ori_json['annotations'][i]["id"])
+        # ori_json['annotations'][i]['category_id'] = 0
+    # ori_json['categories'] = [{'id':0, 'name': 'object'}]
 
     with open(os.path.join(SRC, '{}.json'.format('dataset')), 'w') as f:
         json.dump(ori_json, f)
