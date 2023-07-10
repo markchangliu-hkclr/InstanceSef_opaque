@@ -255,6 +255,8 @@ def inference_imgs(
         weight_path: str,
         show_score_thr: float,
         output_dir: Optional[str] = None,
+        show_font_size: Optional[int] = None,
+        thickness: Optional[int] = None
     ) -> None:
     """Perform inference on images with a mmdet model.
     
@@ -288,13 +290,17 @@ def inference_imgs(
         if output_dir:
             os.makedirs(Path(output_dir), exist_ok=True)
             visual_save_path = os.path.join(output_dir, f"{img_name}_inf.{img_ext}")
-            model.show_result(
-                img_path, 
-                result, 
-                score_thr=show_score_thr, 
-                out_file=visual_save_path, 
-                font_size=10
-            )
+            show_font_size = show_font_size if show_font_size else 10
+            thickness = thickness if thickness else 2
+            if show_font_size:
+                model.show_result(
+                    img_path, 
+                    result, 
+                    score_thr=show_score_thr, 
+                    out_file=visual_save_path, 
+                    font_size=show_font_size,
+                    thickness = thickness
+                )
     time_deltas = np.array(time_deltas)
     print(f"avg time consumed for inferencing {len(time_deltas)} images is {time_deltas.mean()}")
     return model, results
